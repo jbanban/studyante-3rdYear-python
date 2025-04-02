@@ -1,0 +1,29 @@
+{% extends "base/layout.html" %}
+{% block title %} Home {% endblock %}
+
+
+{% block content %}
+    <nav class="navbar bg-body-tertiary">
+        <div class="container">
+        <a class="navbar-brand" href="#">
+            <img src="/docs/5.3/assets/brand/bootstrap-logo.svg" alt="Bootstrap" width="30" height="24">
+        </a>
+        {% for Post in Posts %}
+        <div class="Post">
+            <p><b>#{{ Post.id }}</b></p>
+            <b>
+                <p class="title">
+                    <a href="{{ url_for('Post', Post_id=Post.id)}}">
+                    {{ Post.title }}
+                    </a>
+                </p>
+            </b>
+            <div class="content">
+                <p>{{ Post.content }}</p>
+            </div>
+            <hr>
+        </div>
+        {% endfor %}
+        </div>
+</nav>
+{% endblock %}
