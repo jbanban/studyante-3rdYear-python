@@ -1,3 +1,4 @@
+
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -12,11 +13,14 @@ app.config["SECRET_KEY"] = "labexam"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///labexam.db"
 
 Bootstrap5(app)
+
+
 class Base(DeclarativeBase):
     pass
 
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
+
 
 class Post(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True, unique=True)
@@ -140,12 +144,6 @@ def logout():
     session.pop('user_id', None)
     flash("You have been logged out.", "info")
     return redirect(url_for('login'))
-
-
-
-
-
-
 
 
 
