@@ -3,6 +3,17 @@ body {
     background-color: black;
 }
 
+img {
+    max-width: 200px;
+    height: auto;
+
+}
+
+.clickable-card {
+  cursor: pointer;
+}
+
+
 :root {
   
     /**
@@ -209,7 +220,7 @@ body {
     display:         flex;
     justify-content: space-between;
     align-items:     center;
-    gap: 15px;
+    gap: auto;
     padding: 15px 0;
   }
   
