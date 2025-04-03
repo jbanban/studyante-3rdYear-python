@@ -1070,3 +1070,19 @@ img {
     justify-content: center;
   }
   
+  /* 
+  a href 
+    */
+
+a:link, a:visited {
+  background-color: #24fd53;
+  color: white;
+  padding: 14px 25px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+
+a:hover, a:active {
+  background-color: rgb(28, 141, 84);
+}

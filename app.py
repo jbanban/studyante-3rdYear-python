@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Integer, ForeignKey
+from datetime import datetime
 from flask_bootstrap import Bootstrap5
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -26,6 +27,7 @@ class Post(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True, unique=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey('user.id'), nullable=False)
 
     user = relationship("User", back_populates="posts")
@@ -54,7 +56,12 @@ def home():
         return redirect(url_for('login'))
 
     posts = Post.query.all()
-    return render_template('home.html', posts=posts)
+    comments = Comment.query.all()
+    users = User.query.all()
+    return render_template('home.html', 
+                           posts=posts, 
+                           comments=comments, 
+                           users=users)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -116,19 +123,80 @@ def createpost():
 
     return render_template('createpost.html')
 
-@app.route("/viewpost/<int:Post_id>")
+@app.route("/viewpost/<int:Post_id>", methods=['GET', 'POST'])
 def viewpost(Post_id):
+    if "user_id" not in session:  # Ensure user is logged in
+        flash("You must be logged in to comment.", "warning")
+        return redirect(url_for("login"))
+    
     post = Post.query.get_or_404(Post_id)
+
+    if request.method == 'POST': 
+        comment_content = request.form['comment']
+        user_id = session["user_id"]  
+
+        new_comment = Comment(content=comment_content, user_id=user_id, post_id=Post_id)
+
+        db.session.add(new_comment)
+        db.session.commit()
+
+        flash("Comment added successfully!", "success")
+        return redirect(url_for('viewpost', Post_id=Post_id))
+
     return render_template('viewpost.html', post=post)
+
+@app.route("/editpost/<int:Post_id>", methods=['GET', 'POST'])
+def editpost(Post_id):
+    post = Post.query.get_or_404(Post_id)
+
+    if session.get('user_id') != post.user_id:
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for('viewpost', Post_id=Post_id))
+
+    if request.method == 'POST':
+        new_title = request.form.get('title', '').strip()
+        new_content = request.form.get('content', '').strip()
+
+        if not new_title or not new_content:
+            flash("Title and content cannot be empty!", "danger")
+            return redirect(url_for('editpost', Post_id=Post_id))
+
+        post.title = new_title
+        post.content = new_content
+        db.session.commit()
+        flash("Post updated successfully!", "success")
+        return redirect(url_for('viewpost', Post_id=Post_id))
+
+    return render_template('editpost.html', post=post)
 
 @app.route("/about")
 def about():
     pass
 
-@app.route('/comments/')
-def comments():
-    comments = Comment.query.order_by(Comment.id.desc()).all()
-    return render_template('comments.html', comments=comments)
+@app.route('/edit_comment/<int:comment_id>', methods=['GET', 'POST'])
+def edit_comment(comment_id):
+    comment = Comment.query.get_or_404(comment_id)
+
+    # Ensure only the comment owner can edit
+    if session.get('user_id') != comment.user_id:
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for('viewpost', Post_id=comment.post.id))
+
+    if request.method == 'POST':
+        # ✅ Fix: Use .get() to prevent KeyError
+        new_content = request.form.get('content', '').strip()
+        
+        if not new_content:  # Prevent saving empty content
+            flash("Comment cannot be empty!", "danger")
+            return redirect(url_for('edit_comment', comment_id=comment.id))
+
+        comment.content = new_content
+        db.session.commit()
+        flash("Comment updated successfully!", "success")
+        return redirect(url_for('viewpost', Post_id=comment.post.id))
+
+    return render_template("edit_comment.html", comment=comment, post=comment.post)
+
 
 @app.post('/comments/<int:comment_id>/delete')
 def delete_comment(comment_id):
