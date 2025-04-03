@@ -1,19 +1,19 @@
-<<<<<<< Updated upstream
-print('hello world')
-=======
-from flask import Flask, render_template, url_for, redirect, request, flash
-from flask_bootstrap import Bootstrap4
-from flask_hashing import Hashing
+
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Integer, String, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import String, Integer, ForeignKey
+from flask_bootstrap import Bootstrap5
+from werkzeug.security import generate_password_hash, check_password_hash
+
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "acitivity3"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ITMajor.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
 
-bootstrap = Bootstrap4(app)
+app.config["SECRET_KEY"] = "labexam"
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///labexam.db"
+
+Bootstrap5(app)
+
 
 class Base(DeclarativeBase):
     pass
@@ -21,93 +21,131 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
-hashing = Hashing(app)
-
-
-class Profile(db.Model):
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True, unique=True)
-    firstname: Mapped[str]
-    lastname: Mapped[str]
-    username: Mapped[str] = mapped_column(unique=True)
-    password: Mapped[str]
-
-    def hash_pass(password):
-        return hashing.hash_value(password, salt="abcd")
-
 
 class Post(db.Model):
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True, unique=True)
-    title: Mapped[str]
-    content: Mapped[str]
-    profile_id: Mapped[int] = mapped_column(ForeignKey("profile.id"), nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, unique=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey('user.id'), nullable=False)
 
-@app.route("/")
+    user = relationship("User", back_populates="posts")
+    comments: Mapped[list['Comment']] = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
+
+
+class Comment(db.Model):
+    id : Mapped[int] = mapped_column(primary_key=True, unique=True)
+    content : Mapped[str]
+    user_id :Mapped[int] = mapped_column(ForeignKey('user.id'))
+    post_id : Mapped[int] = mapped_column(ForeignKey('post.id'))
+    post = relationship("Post", back_populates="comments")
+
+class User(db.Model):
+    id : Mapped[int] = mapped_column(primary_key=True, unique=True)
+    username : Mapped[str]
+    email : Mapped[str]
+    password : Mapped[str]
+
+    posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")
+
+
+@app.route('/')
 def home():
-    profiles = Profile.query.all()
-    return render_template("home.html", profiles=profiles)
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
 
-@app.route("/view/<int:id>")
-def profile(id):
-    profile = Profile.query.get(id)
-    return render_template("profile.html", profile=profile)
+    posts = Post.query.all()
+    return render_template('home.html', posts=posts)
 
-@app.route("/create_account", methods=["GET", "POST"])
-def create():
-    if request.method == "POST":
-        firstname = request.form["firstname"]
-        lastname = request.form["lastname"]
-        username = request.form["username"]
-        password = request.form["password"]
-        profile = Profile(firstname=firstname,
-                        lastname=lastname,
-                        username=username,
-                        password=Profile.hash_pass(password))
-        db.session.add(profile)
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash("Username already exists!", "danger")
+            return redirect(url_for('register'))
+
+        hashed_password = generate_password_hash(password)
+        new_user = User(username=username, email=email, password=hashed_password)
+
+        db.session.add(new_user)
         db.session.commit()
-        flash(f"{username} added successfully")
-    return render_template("create.html")
+        
+        flash("Registration successful! Please log in.", "success")
+        return redirect(url_for('login'))
 
-@app.route("/update_account/<int:id>", methods=["GET", "POST"])
-def update(id):
-    profile = Profile.query.get(id)
-    if request.method == "POST":
-        firstname = request.form["firstname"]
-        lastname = request.form["lastname"]
-        profile.firstname = firstname
-        profile.lastname = lastname
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            session['user_id'] = user.id
+            flash("Login successful!", "success")
+            return redirect(url_for('home'))
+        
+        flash("Invalid username or password.", "danger")
+        return redirect(url_for('login'))
+
+    return render_template('login.html')
+
+
+@app.route("/createpost", methods=['GET', 'POST'])
+def createpost():
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+
+        if 'user_id' not in session:
+            flash("You must be logged in to create a post.", "warning")
+            return redirect(url_for('login'))
+
+        new_post = Post(title=title, content=content, user_id=session['user_id'])
+        db.session.add(new_post)
         db.session.commit()
-        flash(f"{profile.username} editted successfully")
-    return render_template("update.html", profile=profile)
+        
+        flash("Post created successfully!", "success")
+        return redirect(url_for('home'))
 
-@app.route("/delete_account/<int:id>")
-def remove(id):
-    Profile.query.filter_by(id=id).delete()
+    return render_template('createpost.html')
+
+@app.route("/viewpost/<int:Post_id>")
+def viewpost(Post_id):
+    post = Post.query.get_or_404(Post_id)
+    return render_template('viewpost.html', post=post)
+
+@app.route("/about")
+def about():
+    pass
+
+@app.route('/comments/')
+def comments():
+    comments = Comment.query.order_by(Comment.id.desc()).all()
+    return render_template('comments.html', comments=comments)
+
+@app.post('/comments/<int:comment_id>/delete')
+def delete_comment(comment_id):
+    comment = Comment.query.get_or_404(comment_id)
+    post_id = comment.post.id
+    db.session.delete(comment)
     db.session.commit()
-    flash(f"Deleted successfully")
-    return redirect(url_for("home"))
+    flash (f'Successfully Deleted')
+    return redirect(url_for('post', post_id=post_id))
 
-@app.route("/create_post/<int:id>", methods=["GET", "POST"])
-def create_post(id):
-    profile = Profile.query.get(id)
-    if request.method == "POST":
-        title = request.form["title"]
-        content = request.form["content"]
-        profile_id = request.form["profile_id"]
-        post = Post(title=title,
-                    content=content,
-                    profile_id=profile_id)
-        db.session.add(post)
-        db.session.commit()
-        flash(f"Created a post successfully")
-    return render_template("create_post.html", profile=profile)
+@app.route('/logout')
+def logout():
+    session.pop('user_id', None)
+    flash("You have been logged out.", "info")
+    return redirect(url_for('login'))
 
-@app.route("/view_all_post")
-def view_all_post():
-    pass
 
-@app.route("/view_post")
-def view_post():
-    pass
 
 with app.app_context():
     db.create_all()
@@ -115,4 +153,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
->>>>>>> Stashed changes
