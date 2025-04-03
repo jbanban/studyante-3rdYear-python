@@ -1,6 +1,3 @@
-<<<<<<< Updated upstream
-print('hello world')
-=======
 from flask import Flask, render_template, url_for, redirect, request, flash
 from flask_bootstrap import Bootstrap4
 from flask_hashing import Hashing
@@ -115,4 +112,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
->>>>>>> Stashed changes
