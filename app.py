@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Integer, ForeignKey
 from datetime import datetime
-from flask_bootstrap import Bootstrap5
+from flask_bootstrap5 import Bootstrap
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -13,7 +13,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "labexam"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///labexam.db"
 
-Bootstrap5(app)
+bootstrap = Bootstrap(app)
 
 
 class Base(DeclarativeBase):
@@ -132,8 +132,12 @@ def viewpost(Post_id):
     post = Post.query.get_or_404(Post_id)
 
     if request.method == 'POST': 
-        comment_content = request.form['comment']
+        comment_content = request.form.get('comment', '').strip()
         user_id = session["user_id"]  
+
+        if not comment_content:
+            flash("Comment cannot be empty!", "danger")
+            return redirect(url_for('viewpost', Post_id=Post_id))
 
         new_comment = Comment(content=comment_content, user_id=user_id, post_id=Post_id)
 
@@ -145,8 +149,10 @@ def viewpost(Post_id):
 
     return render_template('viewpost.html', post=post)
 
-@app.route("/editpost/<int:Post_id>", methods=['GET', 'POST'])
-def editpost(Post_id):
+@app.route("/edit_post/<int:Post_id>", methods=['GET', 'POST'])
+def edit_post(Post_id):
+
+
     post = Post.query.get_or_404(Post_id)
 
     if session.get('user_id') != post.user_id:
@@ -159,7 +165,7 @@ def editpost(Post_id):
 
         if not new_title or not new_content:
             flash("Title and content cannot be empty!", "danger")
-            return redirect(url_for('editpost', Post_id=Post_id))
+            return redirect(url_for('edit_post', Post_id=Post_id))
 
         post.title = new_title
         post.content = new_content
@@ -205,7 +211,7 @@ def delete_comment(comment_id):
     db.session.delete(comment)
     db.session.commit()
     flash (f'Successfully Deleted')
-    return redirect(url_for('post', post_id=post_id))
+    return redirect(url_for('viewpost', Post_id=post_id))
 
 @app.route('/logout')
 def logout():
